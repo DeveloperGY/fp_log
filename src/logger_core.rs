@@ -6,32 +6,13 @@ use std::fmt;
 use std::path;
 use std::sync::{Mutex, OnceLock, RwLock};
 
+/// The error type for a [`LoggerCore`]
 pub enum LoggerCoreError {
+    /// An error during the creation of a [`LoggerCore`]
     LogInitializationFailure(Option<Box<dyn error::Error>>),
+
+    /// An error when writing to a log via a [`LoggerCore`]
     LogWriteFailure(Option<Box<dyn error::Error>>),
-}
-
-impl LoggerCoreError {
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::LogInitializationFailure(reason) => {
-                let reason = match reason {
-                    Some(reason) => reason.to_string(),
-                    None => "unspecified reason".to_string(),
-                };
-
-                format!("failed to initialize log ({})", reason)
-            }
-            Self::LogWriteFailure(reason) => {
-                let reason = match reason {
-                    Some(reason) => reason.to_string(),
-                    None => "unspecified reason".to_string(),
-                };
-
-                format!("failed to write to log ({})", reason)
-            }
-        }
-    }
 }
 
 impl fmt::Debug for LoggerCoreError {
@@ -42,19 +23,42 @@ impl fmt::Debug for LoggerCoreError {
 
 impl fmt::Display for LoggerCoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        let string_representation = match self {
+            Self::LogInitializationFailure(reason) => {
+                let reason = match reason {
+                    Some(reason) => reason.to_string(),
+                    None => "unspecified reason".to_string(),
+                };
+
+                format!("failed to initialize log\n\t- {}", reason)
+            }
+            Self::LogWriteFailure(reason) => {
+                let reason = match reason {
+                    Some(reason) => reason.to_string(),
+                    None => "unspecified reason".to_string(),
+                };
+
+                format!("failed to write to log\n\t- {}", reason)
+            }
+        };
+
+        write!(f, "{}", string_representation)
     }
 }
 
 impl error::Error for LoggerCoreError {}
 
+// NOTE: This could probably be moved to the LoggerCore constructor
+/// The global cache of [`log::Log`]s, built for use in a multithreaded context
 static LOG_FILES: OnceLock<RwLock<HashMap<path::PathBuf, Mutex<log::Log>>>> = OnceLock::new();
 
+/// The core functionality of a logger, can be used to create custom loggers outside of fp_log
 pub struct LoggerCore {
     filepath: path::PathBuf,
 }
 
 impl LoggerCore {
+    /// Creates a new [`LoggerCore`]
     pub fn new(filepath: impl AsRef<path::Path>) -> Result<Self, LoggerCoreError> {
         let filepath = filepath.as_ref().to_path_buf();
 
@@ -81,6 +85,7 @@ impl LoggerCore {
         Ok(Self { filepath })
     }
 
+    /// Logs a single message to the [`log::Log`] referenced by the [`LoggerCore`]
     pub fn log(&self, msg: impl AsRef<str>) -> Result<(), LoggerCoreError> {
         LOG_FILES
             .get()
@@ -101,6 +106,8 @@ impl LoggerCore {
             .map_err(|err| LoggerCoreError::LogWriteFailure(Some(Box::new(err))))
     }
 
+    /// Logs multiple messages to the [`log::Log`] referenced by the [`LoggerCore`], ensuring they
+    /// are grouped together in the log destination
     pub fn log_many(&self, msgs: &[impl AsRef<str>]) -> Result<(), LoggerCoreError> {
         LOG_FILES
             .get()

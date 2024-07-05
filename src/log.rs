@@ -4,32 +4,13 @@ use std::fs;
 use std::io::Write;
 use std::path;
 
+/// The error type for a [`Log`]
 pub enum LogError {
+    /// An error during the creation of a [`Log`]
     LogFileCreationError(Option<Box<dyn error::Error>>),
+
+    /// An error while loggin to a [`Log`]
     LogFileWriteError(Option<Box<dyn error::Error>>),
-}
-
-impl LogError {
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::LogFileCreationError(reason) => {
-                let reason = match reason {
-                    Some(err) => err.to_string(),
-                    None => "unspecified reason".to_string(),
-                };
-
-                format!("failed to create log file ({})", reason)
-            }
-            Self::LogFileWriteError(reason) => {
-                let reason = match reason {
-                    Some(err) => err.to_string(),
-                    None => "unspecified reason".to_string(),
-                };
-
-                format!("failed to write to log file ({})", reason)
-            }
-        }
-    }
 }
 
 impl fmt::Debug for LogError {
@@ -40,17 +21,38 @@ impl fmt::Debug for LogError {
 
 impl fmt::Display for LogError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        let string_representation = match self {
+            Self::LogFileCreationError(reason) => {
+                let reason = match reason {
+                    Some(err) => err.to_string(),
+                    None => "unspecified reason".to_string(),
+                };
+
+                format!("failed to create log file\n\t- {}", reason)
+            }
+            Self::LogFileWriteError(reason) => {
+                let reason = match reason {
+                    Some(err) => err.to_string(),
+                    None => "unspecified reason".to_string(),
+                };
+
+                format!("failed to write to log file\n\t- {}", reason)
+            }
+        };
+
+        write!(f, "{}", string_representation)
     }
 }
 
 impl error::Error for LogError {}
 
+/// A struct representing a single log file
 pub struct Log {
     file: fs::File,
 }
 
 impl Log {
+    /// Creates a new [`Log`] from a specified file path
     pub fn new(filepath: impl AsRef<path::Path>) -> Result<Self, LogError> {
         let filepath = filepath.as_ref().to_path_buf();
 
@@ -60,6 +62,7 @@ impl Log {
         Ok(Self { file })
     }
 
+    /// The core logic of logging to a file
     fn basic_log(&mut self, msg: impl AsRef<str>, should_flush: bool) -> Result<(), LogError> {
         self.file
             .write_all(msg.as_ref().as_bytes())
@@ -74,10 +77,12 @@ impl Log {
         Ok(())
     }
 
+    /// Logs a single message to the log file
     pub fn log(&mut self, msg: impl AsRef<str>) -> Result<(), LogError> {
         self.basic_log(msg, true)
     }
 
+    /// Logs multiple messages to the log file
     pub fn log_many(&mut self, msgs: &[impl AsRef<str>]) -> Result<(), LogError> {
         for i in 0..msgs.len() {
             let is_last_message = i == msgs.len() - 1;
