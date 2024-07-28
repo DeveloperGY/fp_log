@@ -26,7 +26,7 @@ impl FPLogger {
     ) -> std::io::Result<()> {
         let msgs: Vec<_> = msgs
             .iter()
-            .map(|msg| format!("[LOG] {}\n", msg.as_ref()))
+            .map(|msg| format!(" [LOG] {}\n", msg.as_ref()))
             .collect();
 
         self.core.log_many(dest, &msgs)
